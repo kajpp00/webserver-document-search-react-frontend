@@ -1,0 +1,38 @@
+table {
+  position: relative;
+}
+
+th {
+  position: sticky;
+  top: 0;
+  padding-top: 100px
+}
+
+
+.banner {
+  text-decoration: none;
+}
+
+.banner:hover {
+  opacity: .75;
+  text-decoration: underline;
+}
+
+.banner:active {
+  opacity: .2;
+}
+
+
+* {
+  animation: transition 0.2s cubic-bezier(0.455, 0.03, 0.515, 0.955);
+}
+
+@keyframes transition {
+  0% {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
