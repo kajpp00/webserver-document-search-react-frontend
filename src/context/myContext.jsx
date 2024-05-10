@@ -7,7 +7,7 @@ function DataProvider({ children }) {
 
     useEffect(() => {
           async function getData() {
-            const response = await fetch('https://www.tamuk.edu/_misc_assets/scraper-export-test.csv')
+            const response = await fetch('https://www.tamuk.edu/_misc_assets/scraper-export-multiple-paths.csv')
             const reader = response.body.getReader()
             const result = await reader.read()
             const decoder = new TextDecoder('utf-8')

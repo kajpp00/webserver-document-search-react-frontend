@@ -5,6 +5,7 @@ import './App.css'
 // import Tabledata from './components/Table'
 import Search from './components/Search'
 // import Table from './components/Sample'
+import FileFilters from './components/FileFilters'
 import {DataProvider} from './context/myContext'
 
 function App() {
@@ -33,6 +34,7 @@ function App() {
 
         {/* <Table/> */}
         <Search />
+        {/* <FileFilters /> */}
         {/* <Tabledata rows={rows} /> */}
         {/* <main id="main">
       </main> */}
