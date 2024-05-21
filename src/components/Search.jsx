@@ -1,13 +1,13 @@
-import React, { useEffect, useContext, useState, useMemo } from "react";
+import React, { useRef, useContext, useState, useMemo } from "react";
 import Form from "react-bootstrap/Form";
 import Navbar from "react-bootstrap/Navbar";
 import InputGroup from "react-bootstrap/InputGroup";
-import Papa from "papaparse"
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faMagnifyingGlass } from "@fortawesome/free-solid-svg-icons";
 import styled from 'styled-components'
 // import Rows from './Rows'
 import { DataContext } from '../context/myContext'
+
 
 export default function Search() {
   const [filters, setFilters] = useState({
@@ -17,39 +17,59 @@ export default function Search() {
     XLSX: true,
     PPTX: true,
     HTML: true,
+    Yes: true,
+    No: true,
+    'New Match': true,
   });
   const [sortConfig, setSortConfig] = useState({ key: null, direction: 'ascending' });
   const data = useContext(DataContext)
-  const [checked, setChecked] = useState([])
-  const [exportCSV, setExportCSV] = useState([])
-
+  const rowWrapper = useRef()
+  // const [checked, setChecked] = useState([])
+  // const [exportCSV, setExportCSV] = useState([])
 
   const sortedData = useMemo(() => {
-    let sortableData = [...data];
-    if (sortConfig.key === 'KEYWORD_MATCHES' || sortConfig.key === 'RELATIONSHIPS' || sortConfig.key === 'FILE' || sortConfig.key === 'FILE_TYPE' || sortConfig.key === 'ROOT_FOLDER') {
+    let sortableData = [...data.rows];
+
+    function findAllowable(sourceArray, targetArray) {
+      return sourceArray.map(sourceObj => {
+        const match = targetArray.find(targetObj => {
+          return targetObj.URL === sourceObj.URL
+        })
+        return {
+          ...sourceObj, match: match || { 'url': 'n/a', 'ALLOWABLE': 'New Match' }
+        }
+      })
+    }
+
+    const resultsArray = findAllowable(sortableData, data.flags)
+
+    sortableData = resultsArray
+
+    if (sortConfig.key === 'KEYWORD_MATCHES'
+      || sortConfig.key === 'RELATIONSHIPS'
+      || sortConfig.key === 'FILE'
+      || sortConfig.key === 'FILE_TYPE'
+      || sortConfig.key === 'ROOT_FOLDER'
+      || sortConfig.key === 'ALLOWABLE'
+    ) {
       sortableData.sort((a, b) => {
-        // console.log(a.RELATIONSHIPS.localeCompare(b.RELATIONSHIPS))
-        const key = sortConfig.key
-        console.log(key)
+        if (sortConfig.key === 'ALLOWABLE') {
+          a = a.match;
+          b = b.match
+        }
         return sortConfig.direction === 'ascending' ?
           a[`${sortConfig.key}`].localeCompare(b[`${sortConfig.key}`]) :
           b[`${sortConfig.key}`].localeCompare(a[`${sortConfig.key}`]);
+
       })
     }
-    //   else if (sortConfig.key !== null) {
-    //     sortableData.sort((a, b) => {
-    //       if (a[sortConfig.key] < b[sortConfig.key]) {
-    //       return sortConfig.direction === 'ascending' ? -1 : 1;
-    //     }
-    //     if (a[sortConfig.key] > b[sortConfig.key]) {
-    //       return sortConfig.direction === 'ascending' ? 1 : -1;
-    //     }
-    //     return 0;
-    //   });
-    // }
+
     return sortableData;
 
-  }, [data, sortConfig]);
+  }, [data.rows, sortConfig, data.flags]);
+
+
+
 
   const requestSort = (key) => {
 
@@ -81,64 +101,91 @@ export default function Search() {
     setFilters({ ...filters, [filterName]: !filters[filterName] });
   };
 
+  const handleAllowableExport = () => {
+    const allowedArray = []
+    rowWrapper.current.childNodes.forEach(x => {
+      const hyperlink = x.childNodes[1].firstChild.getAttribute('href')
+      const allowed = x.childNodes[6].innerText
 
-
-  const handleExportSelections = (e) => {
-    e.target.setAttribute('checked', !e.target.checked)
-    setChecked([...checked, e.target.id])
+      allowedArray.push({ URL: hyperlink, ALLOWABLE: allowed })
+    })
+    const csvData = convertToCSV(allowedArray);
+    const blob = new Blob([csvData], { type: 'text/csv;charset=utf-8;' });
+    const downloadLink = document.createElement('a')
+    const url = URL.createObjectURL(blob)
+    downloadLink.setAttribute('href', url)
+    downloadLink.setAttribute('download', 'allowable.csv')
+    downloadLink.style.visibility = 'hidden'
+    document.body.appendChild(downloadLink)
+    downloadLink.click()
+    document.body.removeChild(downloadLink)
   }
-  const handleFilter = (e) => {
-    var value = e.target.value.toLowerCase()
-    const rows = document.querySelectorAll('.rows')
 
-    console.log(e.target.checked)
-  }
+  const convertToCSV = (data) => {
+    const header = Object.keys(data[0]).join(',');
+    const rows = data.map(row => Object.values(row).join(',')).join('\n');
+    return `${header}\n${rows}`;
+  };
 
-  const handleExport = () => {
+  // const handleExportSelections = (e) => {
+  //   e.target.setAttribute('checked', !e.target.checked)
+  //   setChecked([...checked, e.target.id])
+  // }
 
-    const exportArr = []
+  // const handleExport = () => {
 
-    if (checked.length) {
+  //   const exportArr = []
 
-      checked.forEach(x => {
+  //   if (checked.length) {
 
-        data.forEach(row => {
+  //     checked.forEach(x => {
 
-          if (row.URL === x) {
-            exportArr.push(row)
-          }
+  //       data.rows.forEach(row => {
 
-        })
+  //         if (row.URL === x) {
+  //           exportArr.push(row)
+  //         }
 
-      })
+  //       })
 
-      var csv = Papa.unparse(exportArr)
-      var csvData = new Blob([csv], { header: true, type: 'text/csv;charset=utf-8' })
-      var csvURL = null
+  //     })
 
-      if (navigator.msSaveBlob) {
-        csvURL = navigator.msSaveBlob(csvData, 'download.csv')
-      } else {
-        csvURL = window.URL.createObjectURL(csvData)
-      }
+  //     var csv = Papa.unparse(exportArr)
+  //     var csvData = new Blob([csv], { header: true, type: 'text/csv;charset=utf-8' })
+  //     var csvURL = null
 
-      var tempLink = document.createElement('a')
-      tempLink.href = csvURL
-      tempLink.setAttribute('download', 'download.csv')
-      tempLink.click()
-      // setExportCSV(exportArr)
+  //     if (navigator.msSaveBlob) {
+  //       csvURL = navigator.msSaveBlob(csvData, 'download.csv')
+  //     } else {
+  //       csvURL = window.URL.createObjectURL(csvData)
+  //     }
 
-    }
-  }
+  //     var tempLink = document.createElement('a')
+  //     tempLink.href = csvURL
+  //     tempLink.setAttribute('download', 'download.csv')
+  //     tempLink.click()
+  //     // setExportCSV(exportArr)
+
+  //   }
+  // }
+
+
+  // const handleFilter = (e) => {
+  //   var value = e.target.value.toLowerCase()
+  //   const rows = document.querySelectorAll('.rows')
+
+  //   console.log(e.target.checked)
+  // }
+
 
 
 
   return (
     <>
       <Navbar
-        className="border-bottom bg-light text-center p-2 "
+        className="border-bottom bg-primary text-light text-center p-2 "
         expand="lg"
-        sticky="top"
+        fixed="top"
       >
         {/* <Navbar.Brand>
           <h1 className="h5">ACR Repository</h1>
@@ -157,45 +204,72 @@ export default function Search() {
               onKeyUp={handleSearch}
             />
           </InputGroup>
-          <a href="https://www.tamuk.edu/_misc_assets/scraper-export-multiple-paths.csv">Download csv</a>
+          <a className="btn btn-sm btn-light m-1" href="https://www.tamuk.edu/_misc_assets/search-tool/matches-download.csv">Export Rows</a>
           <FileFilterWrapper>
+            <div>File Filter</div>
             <div>
-              <input type="checkbox" checked={filters.PDF} onChange={() => handleCheckboxChange('PDF')} />
-              <label>
-                PDF
-              </label>
-            </div>
-            <div>
-              <input type="checkbox" checked={filters.DOCX} onChange={() => handleCheckboxChange('DOCX')} />
-              <label>
-                DOCX
-              </label>
-            </div>
-            <div>
-              <input type="checkbox" checked={filters.DOC} onChange={() => handleCheckboxChange('DOC')} />
-              <label>
-                DOC
-              </label>
-            </div>
-            <div>
-              <input type="checkbox" checked={filters.XLSX} onChange={() => handleCheckboxChange('XLSX')} />
-              <label>
-                XLSX
-              </label>
-            </div>
-            <div>
-              <input type="checkbox" checked={filters.PPTX} onChange={() => handleCheckboxChange('PPTX')} />
-              <label>
-                PPTX
-              </label>
-            </div>
-            <div>
-              <input type="checkbox" checked={filters.HTML} onChange={() => handleCheckboxChange('HTML')} />
-              <label>
-                HTML
-              </label>
+              <div>
+                <input type="checkbox" checked={filters.PDF} onChange={() => handleCheckboxChange('PDF')} />
+                <label>
+                  PDF
+                </label>
+              </div>
+              <div>
+                <input type="checkbox" checked={filters.DOCX} onChange={() => handleCheckboxChange('DOCX')} />
+                <label>
+                  DOCX
+                </label>
+              </div>
+              <div>
+                <input type="checkbox" checked={filters.DOC} onChange={() => handleCheckboxChange('DOC')} />
+                <label>
+                  DOC
+                </label>
+              </div>
+              <div>
+                <input type="checkbox" checked={filters.XLSX} onChange={() => handleCheckboxChange('XLSX')} />
+                <label>
+                  XLSX
+                </label>
+              </div>
+              <div>
+                <input type="checkbox" checked={filters.PPTX} onChange={() => handleCheckboxChange('PPTX')} />
+                <label>
+                  PPTX
+                </label>
+              </div>
+              <div>
+                <input type="checkbox" checked={filters.HTML} onChange={() => handleCheckboxChange('HTML')} />
+                <label>
+                  HTML
+                </label>
+              </div>
             </div>
           </FileFilterWrapper>
+          <AllowableFilterWrapper>
+            <div>Allowable Filter</div>
+            <div>
+              <div>
+                <input type="checkbox" checked={filters.Yes} onChange={() => handleCheckboxChange('Yes')} />
+                <label>
+                  Yes
+                </label>
+              </div>
+              <div>
+                <input type="checkbox" checked={filters.No} onChange={() => handleCheckboxChange('No')} />
+                <label>
+                  No
+                </label>
+              </div>
+              <div>
+                <input type="checkbox" checked={filters['New Match']} onChange={() => handleCheckboxChange('New Match')} />
+                <label>
+                  New Match
+                </label>
+              </div>
+            </div>
+          </AllowableFilterWrapper>
+          <button onClick={handleAllowableExport} className="btn btn-sm btn-light  m-1" href="https://www.tamuk.edu/_misc_assets/search-tool/matches-download-test.csv">Export Allowable</button>
         </Navbar.Collapse>
       </Navbar>
       <StickyWrapper className=" sticky-top">
@@ -224,7 +298,7 @@ export default function Search() {
             {sortConfig.key === 'KEYWORD_MATCHES' && (
               <span>{sortConfig.direction === 'ascending' ? ' 🔽' : ' 🔼'}</span>
             )}
-            </div>
+          </div>
           {/* <div>Created Date</div>
           <div>Modified Date</div> */}
           <div onClick={() => requestSort('RELATIONSHIPS')}>
@@ -233,72 +307,87 @@ export default function Search() {
               <span>{sortConfig.direction === 'ascending' ? ' 🔽' : ' 🔼'}</span>
             )}
           </div>
+          <div onClick={() => requestSort('ALLOWABLE')}>
+            Allowable
+            {sortConfig.key === 'ALLOWABLE' && (
+              <span>{sortConfig.direction === 'ascending' ? ' 🔽' : ' 🔼'}</span>
+            )}
+          </div>
           {/* <div onClick={handleExport} type="button" disabled value="download CSV">Export</div> */}
         </ColumnHeader>
       </StickyWrapper>
       {/* <Rows props={sortedData}/> */}
-      <div>
-        {sortedData.map((x, i) =>
-            <DataWrapper
-              className='rows'
-              style={{ display: filters[x.FILE_TYPE.toUpperCase()] ? 'grid' : 'none' }}
-              data-id={x.URL} key={i}>
-              <div>{i = i + 1}</div>
-              <div><a href={x.URL}>{x.FILE}</a></div>
-              <div className="text-center">{x.FILE_TYPE.toUpperCase()}</div>
-              <div className="text-center">{x.ROOT_FOLDER}</div>
-              <div>
-                    <div>Keyword Matches: {x.KEYWORD_MATCHES.replace(';', ', ')}</div>
-                <details>
-                  <summary>Show Context</summary>
-                  <Context>
-                    <ul>{x.CONTEXT !== undefined &&
-                      x.CONTEXT.split('<li>').map((xx, key) =>
-                        <li key={key} dangerouslySetInnerHTML={{ __html: xx }}></li>
-                      )
-                    }
-                    </ul>
-                  </Context>
-                </details>
-              </div>
-              {/* <div>{x.CREATION_DATE}</div>
-            <div>{x.MODIFIED_DATE}</div> */}
-              <div>
-                <ul>
-                  {x.RELATIONSHIPS &&
-                    x.RELATIONSHIPS.split(';').map((xx, key) =>
-                      xx === 'N/A' ?
-                        <p key={key}>{xx}</p>
-                        :
-                        <li key={key}><a href={xx}>{xx}</a></li>
+      <DataWrapper ref={rowWrapper}>
+        {sortedData && sortedData.map((x, i) =>
+          <DataRow
+            className='rows'
+            style={{ display: filters[x.FILE_TYPE.toUpperCase()] && filters[x.match.ALLOWABLE] ? 'grid' : 'none' }}
+            data-id={x.URL} key={i}>
+            <div>{i = i + 1}</div>
+            <div><a href={x.URL} title={x.URL}>{x.FILE}</a></div>
+            <div className="text-center">{x.FILE_TYPE.toUpperCase()}</div>
+            <div className="text-center">{x.ROOT_FOLDER}</div>
+            <div>
+              <div>Keyword Matches: <strong>{x.KEYWORD_MATCHES.replaceAll(';', ', ')}</strong></div>
+              <details>
+                <summary>Show Context</summary>
+                <Context>
+                  <ul>{x.CONTEXT !== undefined &&
+                    x.CONTEXT.split(';').map((xx, key) =>
+                      <li key={key} dangerouslySetInnerHTML={{ __html: xx }}></li>
+                      // const highlightedSentence = sentence.replace(new RegExp(`\(${keyword})\\b`, 'gi'), '<span>$1</span>');
                     )
                   }
-                </ul>
-              </div>
-              {/* <div>
+                  </ul>
+                </Context>
+              </details>
+            </div>
+            {/* <div>{x.CREATION_DATE}</div>
+            <div>{x.MODIFIED_DATE}</div> */}
+            <div>
+              <ul>
+                {x.RELATIONSHIPS &&
+                  x.RELATIONSHIPS.split(';').map((xx, key) =>
+                    xx === 'N/A' ?
+                      <p key={key}>{xx}</p>
+                      :
+                      <li key={key}><a href={xx}>{xx}</a></li>
+                  )
+                }
+              </ul>
+            </div>
+            <div>
+              {/* {x.match !== null ? x.match.ALLOWABLE : 'New Match'} */}
+              {x.match.ALLOWABLE}
+            </div>
+            {/* <div>
               <label>
                 <input type="checkbox" id={x.URL} onChange={(e) => handleExportSelections(e)} />
               </label>
             </div> */}
-            </DataWrapper>
+          </DataRow>
         )}
-      </div>
+      </DataWrapper>
 
     </>
   );
 }
 
-const grid = '.08fr .25fr .15fr .15fr 1fr .5fr'
+const grid = '.08fr .25fr .08fr .15fr 1fr .5fr .08fr'
 // const grid = 'repeat(6, 1fr)'
 
 const ColumnHeader = styled.div`
   display:grid;
   // padding:0 20px;
   grid-template-columns:${grid};
+  cursor:pointer;
+  background:#123;
+  color:white;
   div {
     display:flex;
     justify-content:center;
     border-right:1px solid;
+    border-top:1px solid;
     font-weight:bold;
     &:last-child {
       border-right:0px!important
@@ -311,28 +400,34 @@ span {
 `
 
 const StickyWrapper = styled.div`
-  top:64px;
+  top:74px;
   background:white;
   border-bottom:1px solid;
 `
 
-const DataWrapper = styled.div`
+const DataWrapper = styled.section`
+  background:#fff
+`
+
+const DataRow = styled.div`
     display:grid;
     grid-template-columns:${grid};
     word-break:break;
-    &:nth-child(even){
-      background:#eee;
-    };
+    margin-top:74px;
+    // &:nth-child(even){
+    //   background:#eee;
+    // };
     > div {
-      padding:20px;
+        padding:20px;
         word-break:break-word;
+        border-bottom:1px solid
     }
    
 `
 
 const Context = styled.div`
 overflow:auto;
-word-break:keep-all!important;
+// word-break:keep-all!important;
 span {
     font-weight:800;
     color:red;
@@ -346,7 +441,32 @@ li {
 const FileFilterWrapper = styled.div`
   width:100%;
   display:flex;
+  flex-direction:column;
+  align-items:center;
+  justifiy-content:center;
   div {
-    padding:20px;
+    display:flex;
+    > div {
+      padding:5px;
+    }
+  }
+  input{
+    margin:5px
+  }
+  `
+const AllowableFilterWrapper = styled.div`
+  width:100%;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  div {
+    display:flex;
+    div {
+      padding:5px;
+    }
+  }
+ input{
+    margin:5px
   }
 `
